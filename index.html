@@ -139,10 +139,10 @@
                         alert('Límite máximo de 3 turnos totales alcanzado.');
                         return;
                     }
-                    if (reservasData[key].length === 2 && !veterano) {
-                        alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
+                    if (reservasData[key].length === 2 && !veterano && !reservasData[key].some(r => r.veterano)) {
+                    alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
                         return;
-                    }
+                        }
 
                     if (reservasData[key].length < 3) {
                         reservasData[key].push({ nombre, telefono, veterano, turnoCompleto });
