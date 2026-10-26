@@ -1,9 +1,8 @@
-<!-- UVUS: QPL7917 -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Horarios Vantus v2</title>
+    <title>Horarios Vantus</title>
     <style>
         body { background: #fcf1ed; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; padding: 20px; }
         .contenedor { max-width: 1024px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
@@ -26,7 +25,6 @@
         .ocup { background-color: #f8d7da !important; color: #721c24; cursor: pointer; font-weight: bold; }
     </style>
     <script>
-        // CONFIGURACIÓN DE JSONBIN.IO (Reemplaza con tus datos reales)
         const BIN_ID = "6adf7b63ffd5d160538d5a5e"; 
         const API_KEY = "$2a$10$ZbPs1irvlHJDayPscuOTu.ul9WRstaKHVR/QztDkHfssQCFVlKROa; 
 
@@ -37,7 +35,6 @@
         document.addEventListener("DOMContentLoaded", function() {
             construirTabla();
             cargarDatosNube();
-            // Refrescar cada 5 segundos para simular tiempo real entre usuarios
             setInterval(cargarDatosNube, 5000);
         });
 
@@ -47,7 +44,7 @@
             })
             .then(response => response.json())
             .then(data => {
-                reservasData = data.record || {};
+                reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
                 actualizarTodaLaVista();
             })
             .catch(err => console.error("Error al cargar datos:", err));
@@ -69,7 +66,7 @@
         function contarTurnosPersona(nombre) {
             let total = 0;
             for (let k in reservasData) {
-                if (reservasData[k] && reservasData[k].some(r => r.nombre === nombre)) total++;
+                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) total++;
             }
             return total;
         }
@@ -77,31 +74,37 @@
         function personaEnDia(nombre, fila) {
             for (let c = 0; c < 5; c++) {
                 let k = fila + "-" + c;
-                if (reservasData[k] && reservasData[k].some(r => r.nombre === nombre)) return true;
+                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) return true;
             }
             return false;
         }
 
         function manejarCelda(fila, col) {
-            let nombre = document.getElementById('txt_nombre').value.trim();
-            let telefono = document.getElementById('txt_telefono').value.trim();
-            let veterano = document.getElementById('chk_veterano').checked;
-            let turnoCompleto = document.getElementById('chk_completo').checked;
+            let nombreInput = document.getElementById('txt_nombre');
+            let telefonoInput = document.getElementById('txt_telefono');
+            let veteranoInput = document.getElementById('chk_veterano');
+            let turnoCompletoInput = document.getElementById('chk_completo');
+
+            if (!nombreInput || !telefonoInput) return;
+
+            let nombre = nombreInput.value.trim();
+            let telefono = telefonoInput.value.trim();
+            let veterano = veteranoInput ? veteranoInput.checked : false;
+            let turnoCompleto = turnoCompletoInput ? turnoCompletoInput.checked : false;
 
             if (!nombre || !telefono) {
                 alert('Rellena nombre y teléfono.');
                 return;
             }
 
-            // Descargar primero los datos más recientes antes de modificar para evitar conflictos
             fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
                 headers: { 'X-Master-Key': API_KEY }
             })
             .then(res => res.json())
             .then(data => {
-                reservasData = data.record || {};
+                reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
                 let key = fila + "-" + col;
-                if (!reservasData[key]) reservasData[key] = [];
+                if (!reservasData[key] || !Array.isArray(reservasData[key])) reservasData[key] = [];
 
                 let index = reservasData[key].findIndex(r => r.nombre === nombre);
 
@@ -153,6 +156,7 @@
 
         function construirTabla() {
             let tbody = document.getElementById('tabla-horarios');
+            if (!tbody) return;
             tbody.innerHTML = "";
             dias.forEach((d, fIndex) => {
                 let tr = document.createElement('tr');
@@ -178,14 +182,14 @@
                     let celda = document.getElementById(`celda-${f}-${c}`);
                     if (!celda) continue;
 
-                    let lista = reservasData[key] || [];
+                    let lista = (reservasData[key] && Array.isArray(reservasData[key])) ? reservasData[key] : [];
                     let count = lista.length;
                     let hayVeterano = lista.some(r => r.veterano);
                     let nombresHtml = lista.map(r => `<small style="display:block; font-size:10px;">- ${r.nombre} ${r.veterano ? '(Vet)' : ''} ${r.turnoCompleto ? '[Completo]' : ''}</small>`).join('');
 
                     if (count === 0) {
                         celda.className = 'lib';
-                        celda.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn">Reservar</button></div>';
+                        celda.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn" type="button">Reservar</button></div>';
                     } else if (!hayVeterano) {
                         celda.className = 'pend';
                         celda.innerHTML = `Pendiente (${count}/3)<br><small style="font-size:9px">Falta Veterano</small><br>${nombresHtml}`;
