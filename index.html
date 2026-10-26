@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Horarios Vantus v3</title>
+    <title>Horarios Vantus v4</title>
     <style>
         body { background: #fcf1ed; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; padding: 20px; }
         .contenedor { max-width: 1024px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
@@ -33,24 +33,32 @@
         const horas = ["09:00 - 11:00", "11:00 - 13:00", "15:00 - 17:00", "17:00 - 19:00", "19:00 - 21:00"];
 
         document.addEventListener("DOMContentLoaded", function() {
+            console.log("DOM cargado. Iniciando construcción de tabla...");
             construirTabla();
             cargarDatosNube();
-            setInterval(cargarDatosNube, 5000);
+            // Subido el tiempo de refresco a 30 segundos (30000 ms)
+            setInterval(cargarDatosNube, 30000);
         });
 
         function cargarDatosNube() {
+            console.log("Solicitando datos a JSONbin...");
             fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
                 headers: { 'X-Master-Key': API_KEY }
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
             .then(data => {
+                console.log("Datos recibidos de JSONbin:", data);
                 reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
                 actualizarTodaLaVista();
             })
-            .catch(err => console.error("Error al cargar datos:", err));
+            .catch(err => console.error("Error al cargar datos desde JSONbin:", err));
         }
 
         function guardarDatosNube() {
+            console.log("Guardando datos en JSONbin...", reservasData);
             return fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                 method: 'PUT',
                 headers: {
@@ -59,8 +67,12 @@
                 },
                 body: JSON.stringify(reservasData)
             })
-            .then(response => response.json())
-            .catch(err => console.error("Error al guardar datos:", err));
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => console.log("Datos guardados con éxito:", data))
+            .catch(err => console.error("Error al guardar datos en JSONbin:", err));
         }
 
         function contarTurnosPersona(nombre) {
@@ -85,7 +97,10 @@
             let veteranoInput = document.getElementById('chk_veterano');
             let turnoCompletoInput = document.getElementById('chk_completo');
 
-            if (!nombreInput || !telefonoInput) return;
+            if (!nombreInput || !telefonoInput) {
+                console.error("No se encontraron los inputs de nombre o teléfono.");
+                return;
+            }
 
             let nombre = nombreInput.value.trim();
             let telefono = telefonoInput.value.trim();
@@ -97,10 +112,15 @@
                 return;
             }
 
+            console.log(`Intentando reservar celda [Fila: ${fila}, Columna: ${col}] para ${nombre}`);
+
             fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
                 headers: { 'X-Master-Key': API_KEY }
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error al verificar antes de reservar! status: ${res.status}`);
+                return res.json();
+            })
             .then(data => {
                 reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
                 let key = fila + "-" + col;
@@ -119,7 +139,6 @@
                         alert('Límite máximo de 3 turnos totales alcanzado.');
                         return;
                     }
-
                     if (reservasData[key].length === 2 && !veterano) {
                         alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
                         return;
@@ -141,23 +160,19 @@
 
                 guardarDatosNube().then(() => {
                     actualizarTodaLaVista();
-                    let lista = reservasData[key];
-                    let hayVeterano = lista.some(r => r.veterano);
-                    let cerrado = (lista.length === 3 && hayVeterano);
-                    console.log(JSON.stringify({
-                        dia: dias[fila],
-                        horario: horas[col],
-                        grupo_cerrado: cerrado,
-                        integrantes: lista
-                    }, null, 2));
                 });
-            });
+            })
+            .catch(err => console.error("Error en manejarCelda:", err));
         }
 
         function construirTabla() {
             let tbody = document.getElementById('tabla-horarios');
-            if (!tbody) return;
+            if (!tbody) {
+                console.error("No se encontró el elemento <tbody> con id 'tabla-horarios'.");
+                return;
+            }
             tbody.innerHTML = "";
+            console.log("Generando filas y celdas...");
             dias.forEach((d, fIndex) => {
                 let tr = document.createElement('tr');
                 let tdDia = document.createElement('td');
@@ -168,19 +183,26 @@
                 for (let cIndex = 0; cIndex < 5; cIndex++) {
                     let td = document.createElement('td');
                     td.id = `celda-${fIndex}-${cIndex}`;
+                    td.className = 'lib';
+                    td.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn" type="button">Reservar</button></div>';
                     td.onclick = function() { manejarCelda(fIndex, cIndex); };
                     tr.appendChild(td);
                 }
                 tbody.appendChild(tr);
             });
+            console.log("Tabla construida correctamente.");
         }
 
         function actualizarTodaLaVista() {
+            console.log("Actualizando la vista con los datos actuales...", reservasData);
             for (let f = 0; f < 5; f++) {
                 for (let c = 0; c < 5; c++) {
                     let key = f + "-" + c;
                     let celda = document.getElementById(`celda-${f}-${c}`);
-                    if (!celda) continue;
+                    if (!celda) {
+                        console.warn(`No se encontró la celda-${f}-${c} en el DOM.`);
+                        continue;
+                    }
 
                     let lista = (reservasData[key] && Array.isArray(reservasData[key])) ? reservasData[key] : [];
                     let count = lista.length;
@@ -227,6 +249,7 @@
                     <th><div class="well">19:00 - 21:00</div></th>
                 </tr>
             </thead>
+            <!-- El id 'tabla-horarios' debe coincidir exactamente para que el script lo encuentre -->
             <tbody id="tabla-horarios"></tbody>
         </table>
     </div>
