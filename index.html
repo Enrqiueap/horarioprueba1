@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <!-- QPL7917 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horarios Vantus v5</title>
     <style>
         body { background: #fcf1ed; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; padding: 20px; }
-        .contenedor { max-width: 1024px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .contenedor { width: 100%; max-width: 1024px; box-sizing: border-box; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h2 { color: #333; text-align: center; }
         .form-inline { margin: 20px 0; text-align: center; }
@@ -20,15 +20,11 @@
         .table-bordered th, .table-bordered td { border-left: 1px solid #ddd; }
         .well { min-height: 20px; padding: 10px; margin-bottom: 0; background-color: #f5f5f5; border: 1px solid #e3e3e3; border-radius: 4px; text-align: center; font-weight: bold; }
 
-        .btn { display: inline-block; padding: 6px 12px; margin: 0 auto; font-size: 14px; line-height: 20px; color: #fff; text-align: center; vertical-align: middle; cursor: pointer; background-color: #388E3C; border: 1px solid #2E7D32; border-radius: 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 2px rgba(0,0,0,0.05); }
-        .btn:hover { background-color: #2E7D32; }
-
         .lib { background-color: #d4edda !important; cursor: pointer; }
         .pend { background-color: #fff3cd !important; color: #856404; cursor: pointer; font-weight: bold; }
         .parcial { background-color: #d1ecf1 !important; color: #0c5460; cursor: pointer; font-weight: bold; }
         .ocup { background-color: #f8d7da !important; color: #721c24; cursor: pointer; font-weight: bold; }
 
-        /* Adaptación Responsive */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .form-inline { display: flex; flex-direction: column; gap: 10px; align-items: center; }
@@ -45,15 +41,12 @@
         const horas = ["09:00 - 11:00", "11:00 - 13:00", "15:00 - 17:00", "17:00 - 19:00", "19:00 - 21:00"];
 
         document.addEventListener("DOMContentLoaded", function() {
-            console.log("DOM cargado. Iniciando construcción de tabla...");
             construirTabla();
             cargarDatosNube();
-            // Subido el tiempo de refresco a 30 segundos (30000 ms)
             setInterval(cargarDatosNube, 30000);
         });
 
         function cargarDatosNube() {
-            console.log("Solicitando datos a JSONbin...");
             fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
                 headers: { 'X-Master-Key': API_KEY }
             })
@@ -62,16 +55,13 @@
                 return response.json();
             })
             .then(data => {
-                console.log("Datos recibidos de JSONbin:", data);
                 reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
                 actualizarTodaLaVista();
             })
-            .catch(err => console.error("Error al cargar datos desde JSONbin:", err));
             .catch(err => console.error("Error al cargar datos:", err));
         }
 
         function guardarDatosNube() {
-            console.log("Guardando datos en JSONbin...", reservasData);
             return fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                 method: 'PUT',
                 headers: {
@@ -84,15 +74,19 @@
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.json();
             })
-            .then(data => console.log("Datos guardados con éxito:", data))
-            .catch(err => console.error("Error al guardar datos en JSONbin:", err));
             .catch(err => console.error("Error al guardar datos:", err));
         }
 
         function contarTurnosPersona(nombre) {
             let total = 0;
             for (let k in reservasData) {
-                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) total++;
+                if (reservasData[k] && Array.isArray(reservasData[k])) {
+                    reservasData[k].forEach(r => {
+                        if (r.nombre.toLowerCase() === nombre.toLowerCase()) {
+                            total += r.turnoCompleto ? 1 : 0.5;
+                        }
+                    });
+                }
             }
             return total;
         }
@@ -100,7 +94,7 @@
         function personaEnDia(nombre, fila) {
             for (let c = 0; c < 5; c++) {
                 let k = fila + "-" + c;
-                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) return true;
+                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre.toLowerCase() === nombre.toLowerCase())) return true;
             }
             return false;
         }
@@ -110,11 +104,6 @@
             let telefonoInput = document.getElementById('txt_telefono');
             let veteranoInput = document.getElementById('chk_veterano');
             let turnoCompletoInput = document.getElementById('chk_completo');
-
-            if (!nombreInput || !telefonoInput) {
-                console.error("No se encontraron los inputs de nombre o teléfono.");
-                return;
-            }
 
             let nombre = nombreInput.value.trim();
             let telefono = telefonoInput.value.trim();
@@ -126,13 +115,10 @@
                 return;
             }
 
-            console.log(`Intentando reservar celda [Fila: ${fila}, Columna: ${col}] para ${nombre}`);
-
             fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
                 headers: { 'X-Master-Key': API_KEY }
             })
             .then(res => {
-                if (!res.ok) throw new Error(`HTTP error al verificar antes de reservar! status: ${res.status}`);
                 if (!res.ok) throw new Error(`HTTP error al verificar! status: ${res.status}`);
                 return res.json();
             })
@@ -141,7 +127,7 @@
                 let key = fila + "-" + col;
                 if (!reservasData[key] || !Array.isArray(reservasData[key])) reservasData[key] = [];
 
-                let index = reservasData[key].findIndex(r => r.nombre === nombre);
+                let index = reservasData[key].findIndex(r => r.nombre.toLowerCase() === nombre.toLowerCase());
 
                 if (index !== -1) {
                     reservasData[key].splice(index, 1);
@@ -154,12 +140,9 @@
                         alert('Límite máximo de 3 turnos totales alcanzado.');
                         return;
                     }
-                    // NUEVA CONDICIÓN DE VETERANO AQUÍ
                     if (reservasData[key].length === 2 && !veterano && !reservasData[key].some(r => r.veterano)) {
-                    alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
                         alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
                         return;
-                        }
                     }
 
                     if (reservasData[key].length < 3) {
@@ -185,62 +168,47 @@
 
         function construirTabla() {
             let tbody = document.getElementById('tabla-horarios');
-            if (!tbody) {
-                console.error("No se encontró el elemento <tbody> con id 'tabla-horarios'.");
-                return;
-            }
             if (!tbody) return;
             tbody.innerHTML = "";
-            console.log("Generando filas y celdas...");
+
             dias.forEach((d, fIndex) => {
                 let tr = document.createElement('tr');
                 let tdDia = document.createElement('td');
-                tdDia.className = 'well';
-                tdDia.innerHTML = `<b>${d}</b>`;
+                tdDia.innerHTML = `<strong>${d}</strong>`;
                 tr.appendChild(tdDia);
 
-                for (let cIndex = 0; cIndex < 5; cIndex++) {
+                for (let cIndex = 0; cIndex < horas.length; cIndex++) {
                     let td = document.createElement('td');
                     td.id = `celda-${fIndex}-${cIndex}`;
-                    td.className = 'lib';
-                    td.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn" type="button">Reservar</button></div>';
-                    td.onclick = function() { manejarCelda(fIndex, cIndex); };
+                    td.className = "lib";
+                    td.onclick = () => manejarCelda(fIndex, cIndex);
                     tr.appendChild(td);
                 }
                 tbody.appendChild(tr);
             });
-            console.log("Tabla construida correctamente.");
         }
 
         function actualizarTodaLaVista() {
-            console.log("Actualizando la vista con los datos actuales...", reservasData);
             for (let f = 0; f < 5; f++) {
                 for (let c = 0; c < 5; c++) {
                     let key = f + "-" + c;
                     let celda = document.getElementById(`celda-${f}-${c}`);
-                    if (!celda) {
-                        console.warn(`No se encontró la celda-${f}-${c} en el DOM.`);
-                        continue;
-                    }
                     if (!celda) continue;
 
                     let lista = (reservasData[key] && Array.isArray(reservasData[key])) ? reservasData[key] : [];
                     let count = lista.length;
-                    let hayVeterano = lista.some(r => r.veterano);
                     let nombresHtml = lista.map(r => `<small style="display:block; font-size:10px;">- ${r.nombre} ${r.veterano ? '(Vet)' : ''} ${r.turnoCompleto ? '[Completo]' : ''}</small>`).join('');
 
+                    celda.className = "";
                     if (count === 0) {
-                        celda.className = 'lib';
-                        celda.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn" type="button">Reservar</button></div>';
-                    } else if (!hayVeterano) {
-                        celda.className = 'pend';
-                        celda.innerHTML = `Pendiente (${count}/3)<br><small style="font-size:9px">Falta Veterano</small><br>${nombresHtml}`;
+                        celda.classList.add('lib');
+                        celda.innerHTML = `Libre <small>(0/3)</small>`;
                     } else if (count < 3) {
-                        celda.className = 'parcial';
-                        celda.innerHTML = `${count}/3<br>${nombresHtml}`;
+                        celda.classList.add('parcial');
+                        celda.innerHTML = nombresHtml + `<small>(${count}/3)</small>`;
                     } else {
-                        celda.className = 'ocup';
-                        celda.innerHTML = `Ocupado (3/3)<br>${nombresHtml}`;
+                        celda.classList.add('ocup');
+                        celda.innerHTML = nombresHtml + `<small>(Completo)</small>`;
                     }
                 }
             }
@@ -248,16 +216,16 @@
     </script>
 </head>
 <body>
-    <div class="contenedor">
-        <h2>Horarios Vantus</h2>
+<div class="contenedor">
+    <h2>Horarios Vantus</h2>
+    <form class="form-inline" onsubmit="return false;">
+        <input type="text" id="txt_nombre" class="input-medium" placeholder="Nombre" required>
+        <input type="tel" id="txt_telefono" class="input-medium" placeholder="Teléfono" required>
+        <label class="checkbox"><input type="checkbox" id="chk_veterano"> Veterano</label>
+        <label class="checkbox"><input type="checkbox" id="chk_completo"> Turno completo</label>
+    </form>
 
-        <form class="form-inline" onsubmit="return false;">
-            <input type="text" id="txt_nombre" class="input-medium" placeholder="Nombre" required>
-            <input type="tel" id="txt_telefono" class="input-medium" placeholder="Teléfono" required>
-            <label class="checkbox"><input type="checkbox" id="chk_veterano"> Veterano</label>
-            <label class="checkbox"><input type="checkbox" id="chk_completo"> Turno completo</label>
-        </form>
-
+    <div class="tabla-wrapper">
         <table class="table table-bordered">
             <thead>
                 <tr>
@@ -269,24 +237,9 @@
                     <th><div class="well">19:00 - 21:00</div></th>
                 </tr>
             </thead>
-            <!-- El id 'tabla-horarios' debe coincidir exactamente para que el script lo encuentre -->
             <tbody id="tabla-horarios"></tbody>
         </table>
-        <div class="tabla-wrapper">
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th><div class="well">09:00 - 11:00</div></th>
-                        <th><div class="well">11:00 - 13:00</div></th>
-                        <th><div class="well">15:00 - 17:00</div></th>
-                        <th><div class="well">17:00 - 19:00</div></th>
-                        <th><div class="well">19:00 - 21:00</div></th>
-                    </tr>
-                </thead>
-                <tbody id="tabla-horarios"></tbody>
-            </table>
-        </div>
     </div>
+</div>
 </body>
 </html>
