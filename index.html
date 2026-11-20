@@ -4,14 +4,13 @@
     <!-- Identificador de control: QPL7917 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horarios Vantus v5</title>
+    <title>Horarios Vantus</title>
     <style>
         body { background: #fcf1ed; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; padding: 20px; }
         .contenedor { width: 100%; max-width: 1024px; box-sizing: border-box; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h2 { color: #333; text-align: center; }
         .form-inline { margin: 20px 0; text-align: center; }
         .input-medium { width: 150px; padding: 4px 6px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        .checkbox { display: inline-block; margin-left: 10px; font-weight: normal; }
         
         .tabla-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .table { width: 100%; margin-bottom: 20px; border-collapse: collapse; background-color: transparent; }
@@ -24,15 +23,12 @@
         .btn:hover { background-color: #2E7D32; }
 
         .lib { background-color: #d4edda !important; cursor: pointer; }
-        .pend { background-color: #fff3cd !important; color: #856404; cursor: pointer; font-weight: bold; }
-        .parcial { background-color: #d1ecf1 !important; color: #0c5460; cursor: pointer; font-weight: bold; }
-        .ocup { background-color: #f8d7da !important; color: #721c24; cursor: pointer; font-weight: bold; }
+        .disp { background-color: #d1ecf1 !important; color: #0c5460; cursor: pointer; font-weight: bold; }
 
         @media (max-width: 768px) {
             body { padding: 10px; }
             .form-inline { display: flex; flex-direction: column; gap: 10px; align-items: center; }
             .input-medium { width: 90%; margin-right: 0; }
-            .checkbox { margin-left: 0; }
         }
     </style>
     <script>
@@ -41,12 +37,13 @@
 
         let reservasData = {};
         const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-        const horas = ["09:00 - 11:00", "11:00 - 13:00", "15:00 - 17:00", "17:00 - 19:00", "19:00 - 21:00"];
 
         document.addEventListener("DOMContentLoaded", function() {
             construirTabla();
             cargarDatosNube();
             setInterval(cargarDatosNube, 30000);
+
+            document.getElementById('txt_nombre').addEventListener('input', actualizarTodaLaVista);
         });
 
         function cargarDatosNube() {
@@ -80,32 +77,9 @@
             .catch(err => console.error("Error al guardar datos:", err));
         }
 
-        function contarTurnosPersona(nombre) {
-            let total = 0;
-            for (let k in reservasData) {
-                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) total++;
-            }
-            return total;
-        }
-
-        function personaEnDia(nombre, fila) {
-            for (let c = 0; c < 5; c++) {
-                let k = fila + "-" + c;
-                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) return true;
-            }
-            return false;
-        }
-
         function manejarCelda(fila, col) {
-            let nombreInput = document.getElementById('txt_nombre');
-            let telefonoInput = document.getElementById('txt_telefono');
-            let veteranoInput = document.getElementById('chk_veterano');
-            let turnoCompletoInput = document.getElementById('chk_completo');
-
-            let nombre = nombreInput.value.trim();
-            let telefono = telefonoInput.value.trim();
-            let veterano = veteranoInput ? veteranoInput.checked : false;
-            let turnoCompleto = turnoCompletoInput ? turnoCompletoInput.checked : false;
+            let nombre = document.getElementById('txt_nombre').value.trim();
+            let telefono = document.getElementById('txt_telefono').value.trim();
 
             if (!nombre || !telefono) {
                 alert('Rellena nombre y teléfono.');
@@ -129,31 +103,7 @@
                 if (index !== -1) {
                     reservasData[key].splice(index, 1);
                 } else {
-                    if (personaEnDia(nombre, fila)) {
-                        alert('Ya tienes un turno reservado este mismo día.');
-                        return;
-                    }
-                    if (contarTurnosPersona(nombre) >= 3) {
-                        alert('Límite máximo de 3 turnos totales alcanzado.');
-                        return;
-                    }
-                    if (reservasData[key].length === 2 && !veterano && !reservasData[key].some(r => r.veterano)) {
-                        alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
-                        return;
-                    }
-
-                    if (reservasData[key].length < 3) {
-                        reservasData[key].push({ nombre, telefono, veterano, turnoCompleto });
-                    } else {
-                        let idxRemovible = reservasData[key].findIndex(r => !r.turnoCompleto);
-                        if (turnoCompleto && idxRemovible !== -1) {
-                            reservasData[key].splice(idxRemovible, 1);
-                            reservasData[key].push({ nombre, telefono, veterano, turnoCompleto });
-                        } else {
-                            alert('Grupo lleno (3/3).');
-                            return;
-                        }
-                    }
+                    reservasData[key].push({ nombre, telefono });
                 }
 
                 guardarDatosNube().then(() => {
@@ -171,77 +121,4 @@
                 let tr = document.createElement('tr');
                 let tdDia = document.createElement('td');
                 tdDia.className = 'well';
-                tdDia.innerHTML = `<b>${d}</b>`;
-                tr.appendChild(tdDia);
-
-                for (let cIndex = 0; cIndex < 5; cIndex++) {
-                    let td = document.createElement('td');
-                    td.id = `celda-${fIndex}-${cIndex}`;
-                    td.className = 'lib';
-                    td.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn" type="button">Reservar</button></div>';
-                    td.onclick = function() { manejarCelda(fIndex, cIndex); };
-                    tr.appendChild(td);
-                }
-                tbody.appendChild(tr);
-            });
-        }
-
-        function actualizarTodaLaVista() {
-            for (let f = 0; f < 5; f++) {
-                for (let c = 0; c < 5; c++) {
-                    let key = f + "-" + c;
-                    let celda = document.getElementById(`celda-${f}-${c}`);
-                    if (!celda) continue;
-
-                    let lista = (reservasData[key] && Array.isArray(reservasData[key])) ? reservasData[key] : [];
-                    let count = lista.length;
-                    let hayVeterano = lista.some(r => r.veterano);
-                    let nombresHtml = lista.map(r => `<small style="display:block; font-size:10px;">- ${r.nombre} ${r.veterano ? '(Vet)' : ''} ${r.turnoCompleto ? '[Completo]' : ''}</small>`).join('');
-
-                    if (count === 0) {
-                        celda.className = 'lib';
-                        celda.innerHTML = '<div style="display:flex; justify-content:center;"><button class="btn" type="button">Reservar</button></div>';
-                    } else if (!hayVeterano) {
-                        celda.className = 'pend';
-                        celda.innerHTML = `Pendiente (${count}/3)<br><small style="font-size:9px">Falta Veterano</small><br>${nombresHtml}`;
-                    } else if (count < 3) {
-                        celda.className = 'parcial';
-                        celda.innerHTML = `${count}/3<br>${nombresHtml}`;
-                    } else {
-                        celda.className = 'ocup';
-                        celda.innerHTML = `Ocupado (3/3)<br>${nombresHtml}`;
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body>
-    <div class="contenedor">
-        <h2>Horarios Vantus</h2>
-        
-        <form class="form-inline" onsubmit="return false;">
-            <input type="text" id="txt_nombre" class="input-medium" placeholder="Nombre" required>
-            <input type="tel" id="txt_telefono" class="input-medium" placeholder="Teléfono" required>
-            <label class="checkbox"><input type="checkbox" id="chk_veterano"> Veterano</label>
-            <label class="checkbox"><input type="checkbox" id="chk_completo"> Turno completo</label>
-        </form>
-
-        <div class="tabla-wrapper">
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th><div class="well">09:00 - 11:00</div></th>
-                        <th><div class="well">11:00 - 13:00</div></th>
-                        <th><div class="well">15:00 - 17:00</div></th>
-                        <th><div class="well">17:00 - 19:00</div></th>
-                        <th><div class="well">19:00 - 21:00</div></th>
-                    </tr>
-                </thead>
-                <tbody id="tabla-horarios"></tbody>
-            </table>
-        </div>
-    </div>
-</body>
-</html>
+                tdDia.
