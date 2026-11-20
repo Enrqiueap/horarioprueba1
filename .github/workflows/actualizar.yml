@@ -1,0 +1,12 @@
+name: Automatización Horarios Vantus
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Configurar entorno QPL7917
+      run: echo "Entorno de compilación y despliegue automatizado activo."
