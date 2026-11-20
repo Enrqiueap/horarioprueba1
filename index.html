@@ -4,7 +4,7 @@
     <!-- Identificador de control: QPL7917 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horarios Vantus v5 - GitHub nativo</title>
+    <title>Horarios Vantus v5</title>
     <style>
         body { background: #fcf1ed; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; padding: 20px; }
         .contenedor { width: 100%; max-width: 1024px; box-sizing: border-box; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
@@ -27,40 +27,140 @@
         .pend { background-color: #fff3cd !important; color: #856404; cursor: pointer; font-weight: bold; }
         .parcial { background-color: #d1ecf1 !important; color: #0c5460; cursor: pointer; font-weight: bold; }
         .ocup { background-color: #f8d7da !important; color: #721c24; cursor: pointer; font-weight: bold; }
+
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .form-inline { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+            .input-medium { width: 90%; margin-right: 0; }
+            .checkbox { margin-left: 0; }
+        }
     </style>
     <script>
-        // Configuración de tu repositorio de GitHub para lectura directa
-        const REPO_OWNER = "TU_USUARIO_GITHUB";
-        const REPO_NAME = "TU_REPOSITORIO";
-        const BRANCH = "main";
+        const BIN_ID = "6adf7b63ffd5d160538d5a5e"; 
+        const API_KEY = "$2a$10$ZbPs1irvlHJDayPscuOTu.ul9WRstaKHVR/QztDkHfssQCFVlKROa"; 
 
         let reservasData = {};
         const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+        const horas = ["09:00 - 11:00", "11:00 - 13:00", "15:00 - 17:00", "17:00 - 19:00", "19:00 - 21:00"];
 
         document.addEventListener("DOMContentLoaded", function() {
             construirTabla();
-            cargarDatosRepo();
-            setInterval(cargarDatosRepo, 30000);
+            cargarDatosNube();
+            setInterval(cargarDatosNube, 30000);
         });
 
-        function cargarDatosRepo() {
-            // Lee directamente el archivo datos.json alojado en la rama de GitHub Pages
-            fetch(`datos.json?t=${new Date().getTime()}`)
+        function cargarDatosNube() {
+            fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                headers: { 'X-Master-Key': API_KEY }
+            })
             .then(response => {
-                if (!response.ok) throw new Error("No se pudo cargar datos.json");
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.json();
             })
             .then(data => {
-                reservasData = (data && typeof data === 'object') ? data : {};
+                reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
                 actualizarTodaLaVista();
             })
             .catch(err => console.error("Error al cargar datos:", err));
         }
 
-        function guardarDatosRepo() {
-            // Nota: Para escritura nativa segura sin backend, se suele disparar un GitHub Action 
-            // mediante un Webhook o se gestiona el token cifrado en la Action.
-            console.log("Datos listos para sincronizar mediante GitHub Actions");
+        function guardarDatosNube() {
+            return fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Master-Key': API_KEY
+                },
+                body: JSON.stringify(reservasData)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .catch(err => console.error("Error al guardar datos:", err));
+        }
+
+        function contarTurnosPersona(nombre) {
+            let total = 0;
+            for (let k in reservasData) {
+                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) total++;
+            }
+            return total;
+        }
+
+        function personaEnDia(nombre, fila) {
+            for (let c = 0; c < 5; c++) {
+                let k = fila + "-" + c;
+                if (reservasData[k] && Array.isArray(reservasData[k]) && reservasData[k].some(r => r.nombre === nombre)) return true;
+            }
+            return false;
+        }
+
+        function manejarCelda(fila, col) {
+            let nombreInput = document.getElementById('txt_nombre');
+            let telefonoInput = document.getElementById('txt_telefono');
+            let veteranoInput = document.getElementById('chk_veterano');
+            let turnoCompletoInput = document.getElementById('chk_completo');
+
+            let nombre = nombreInput.value.trim();
+            let telefono = telefonoInput.value.trim();
+            let veterano = veteranoInput ? veteranoInput.checked : false;
+            let turnoCompleto = turnoCompletoInput ? turnoCompletoInput.checked : false;
+
+            if (!nombre || !telefono) {
+                alert('Rellena nombre y teléfono.');
+                return;
+            }
+
+            fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                headers: { 'X-Master-Key': API_KEY }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error al verificar! status: ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                reservasData = (data.record && typeof data.record === 'object') ? data.record : {};
+                let key = fila + "-" + col;
+                if (!reservasData[key] || !Array.isArray(reservasData[key])) reservasData[key] = [];
+
+                let index = reservasData[key].findIndex(r => r.nombre === nombre);
+
+                if (index !== -1) {
+                    reservasData[key].splice(index, 1);
+                } else {
+                    if (personaEnDia(nombre, fila)) {
+                        alert('Ya tienes un turno reservado este mismo día.');
+                        return;
+                    }
+                    if (contarTurnosPersona(nombre) >= 3) {
+                        alert('Límite máximo de 3 turnos totales alcanzado.');
+                        return;
+                    }
+                    if (reservasData[key].length === 2 && !veterano && !reservasData[key].some(r => r.veterano)) {
+                        alert('El último hueco del grupo solo puede ser ocupado por un veterano.');
+                        return;
+                    }
+
+                    if (reservasData[key].length < 3) {
+                        reservasData[key].push({ nombre, telefono, veterano, turnoCompleto });
+                    } else {
+                        let idxRemovible = reservasData[key].findIndex(r => !r.turnoCompleto);
+                        if (turnoCompleto && idxRemovible !== -1) {
+                            reservasData[key].splice(idxRemovible, 1);
+                            reservasData[key].push({ nombre, telefono, veterano, turnoCompleto });
+                        } else {
+                            alert('Grupo lleno (3/3).');
+                            return;
+                        }
+                    }
+                }
+
+                guardarDatosNube().then(() => {
+                    actualizarTodaLaVista();
+                });
+            })
+            .catch(err => console.error("Error en manejarCelda:", err));
         }
 
         function construirTabla() {
@@ -96,7 +196,7 @@
                     let lista = (reservasData[key] && Array.isArray(reservasData[key])) ? reservasData[key] : [];
                     let count = lista.length;
                     let hayVeterano = lista.some(r => r.veterano);
-                    let nombresHtml = lista.map(r => `<small style="display:block; font-size:10px;">- ${r.nombre} ${r.veterano ? '(Vet)' : ''}</small>`).join('');
+                    let nombresHtml = lista.map(r => `<small style="display:block; font-size:10px;">- ${r.nombre} ${r.veterano ? '(Vet)' : ''} ${r.turnoCompleto ? '[Completo]' : ''}</small>`).join('');
 
                     if (count === 0) {
                         celda.className = 'lib';
@@ -119,12 +219,14 @@
 <body>
     <div class="contenedor">
         <h2>Horarios Vantus</h2>
+        
         <form class="form-inline" onsubmit="return false;">
             <input type="text" id="txt_nombre" class="input-medium" placeholder="Nombre" required>
             <input type="tel" id="txt_telefono" class="input-medium" placeholder="Teléfono" required>
             <label class="checkbox"><input type="checkbox" id="chk_veterano"> Veterano</label>
             <label class="checkbox"><input type="checkbox" id="chk_completo"> Turno completo</label>
         </form>
+
         <div class="tabla-wrapper">
             <table class="table table-bordered">
                 <thead>
